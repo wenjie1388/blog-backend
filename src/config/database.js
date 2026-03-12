@@ -27,7 +27,13 @@ async function testConnection() {
 
 // 执行查询
 async function query(sql, params) {
-  const [rows] = await pool.execute(sql, params);
+  // 确保 LIMIT/OFFSET 参数是整数（MySQL 严格要求）
+  const processedParams = params ? params.map(p => {
+    if (typeof p === 'number') return p;
+    if (typeof p === 'string' && /^-?\d+$/.test(p)) return parseInt(p, 10);
+    return p;
+  }) : params;
+  const [rows] = await pool.execute(sql, processedParams);
   return rows;
 }
 

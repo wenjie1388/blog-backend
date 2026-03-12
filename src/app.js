@@ -19,6 +19,7 @@ const themeRoutes = require('./routes/theme');
 const pageRoutes = require('./routes/page');
 const uploadRoutes = require('./routes/upload');
 const statsRoutes = require('./routes/stats');
+const dictRoutes = require('./routes/dict');
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use('/api/themes', themeRoutes);
 app.use('/api/pages', pageRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/dict', dictRoutes);
 
 // 健康检查
 app.get('/api/health', (req, res) => {

@@ -17,10 +17,10 @@ function generateExcerpt(content, maxLength = 200) {
 // 获取文章列表
 router.get('/', paginationValidation, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = req.query.page || 1;
+    const limit = req.query.limit || 10;
     const offset = (page - 1) * limit;
-    const categoryId = req.query.categoryId;
+    const categoryId = req.query.categoryId ? Number(req.query.categoryId) : null;
     const status = req.query.status || 'published';
     const search = req.query.search || '';
     const tag = req.query.tag || '';
@@ -52,11 +52,11 @@ router.get('/', paginationValidation, async (req, res) => {
     const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
     
     // 获取总数
-    const [countResult] = await query(
+    const countRows = await query(
       `SELECT COUNT(*) as total FROM articles a ${whereClause}`,
       params
     );
-    const total = countResult.total;
+    const total = countRows[0].total;
     
     // 获取文章列表
     const articles = await query(
@@ -69,8 +69,8 @@ router.get('/', paginationValidation, async (req, res) => {
        LEFT JOIN users u ON a.authorId = u.id
        ${whereClause}
        ORDER BY a.createdAt DESC
-       LIMIT ? OFFSET ?`,
-      [...params, limit, offset]
+       LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`,
+      params
     );
     
     Response.paginated(res, articles, {
@@ -217,7 +217,7 @@ router.delete('/:id', authenticateToken, requireAdmin, idParamValidation, async 
 router.get('/:id/related', async (req, res) => {
   try {
     const { id } = req.params;
-    const limit = parseInt(req.query.limit) || 4;
+    const limit = req.query.limit || 4;
     
     // 获取当前文章的分类和标签
     const articles = await query(
@@ -252,15 +252,17 @@ router.get('/:id/related', async (req, res) => {
       const additionalLimit = limit - relatedArticles.length;
       const existingIds = relatedArticles.map(a => a.id).concat([parseInt(id)]);
       
+      // Build placeholders for IN clause
+      const placeholders = existingIds.map(() => '?').join(',');
       const additionalArticles = await query(
         `SELECT a.id, a.title, a.coverImage, a.createdAt,
                 c.name as categoryName
          FROM articles a
          LEFT JOIN categories c ON a.categoryId = c.id
-         WHERE a.id NOT IN (?) AND a.status = 'published'
+         WHERE a.id NOT IN (${placeholders}) AND a.status = 'published'
          ORDER BY a.createdAt DESC
          LIMIT ?`,
-        [existingIds, additionalLimit]
+        [...existingIds, Number(additionalLimit)]
       );
       
       relatedArticles = relatedArticles.concat(additionalArticles);

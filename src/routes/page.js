@@ -148,8 +148,8 @@ function generateExcerpt(content, maxLength = 200) {
 // 获取页面列表
 router.get('/', paginationValidation, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = req.query.page || 1;
+    const limit = req.query.limit || 10;
     const offset = (page - 1) * limit;
     const status = req.query.status || 'published';
     const search = req.query.search || '';

@@ -9,8 +9,8 @@ const { paginationValidation } = require('../middleware/validator');
 // 获取用户列表（管理员）
 router.get('/', authenticateToken, requireAdmin, paginationValidation, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = req.query.page || 1;
+    const limit = req.query.limit || 10;
     const offset = (page - 1) * limit;
     const search = req.query.search || '';
     
@@ -34,8 +34,8 @@ router.get('/', authenticateToken, requireAdmin, paginationValidation, async (re
       `SELECT id, username, email, nickname, avatar, role, status, createdAt, lastLogin 
        FROM users ${whereClause} 
        ORDER BY createdAt DESC 
-       LIMIT ? OFFSET ?`,
-      [...params, limit, offset]
+       LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`,
+      params
     );
     
     Response.paginated(res, users, {

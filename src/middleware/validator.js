@@ -148,11 +148,85 @@ const paginationValidation = [
   query('page')
     .optional()
     .isInt({ min: 1 })
-    .withMessage('Page must be a positive integer'),
+    .withMessage('Page must be a positive integer')
+    .toInt(),
   query('limit')
     .optional()
     .isInt({ min: 1, max: 100 })
-    .withMessage('Limit must be between 1 and 100'),
+    .withMessage('Limit must be between 1 and 100')
+    .toInt(),
+  handleValidationErrors
+];
+
+// 字典类型验证
+const dictTypeValidation = [
+  body('dictName')
+    .trim()
+    .notEmpty()
+    .withMessage('Dict name is required')
+    .isLength({ max: 100 })
+    .withMessage('Dict name must be less than 100 characters'),
+  body('dictType')
+    .trim()
+    .notEmpty()
+    .withMessage('Dict type is required')
+    .matches(/^[a-z][a-z0-9_]*$/)
+    .withMessage('Dict type must start with lowercase letter and contain only lowercase letters, numbers and underscores')
+    .isLength({ max: 100 })
+    .withMessage('Dict type must be less than 100 characters'),
+  body('status')
+    .optional()
+    .isIn(['0', '1'])
+    .withMessage('Status must be 0 (disabled) or 1 (enabled)'),
+  body('remark')
+    .optional()
+    .isLength({ max: 500 })
+    .withMessage('Remark must be less than 500 characters'),
+  handleValidationErrors
+];
+
+// 字典数据验证
+const dictDataValidation = [
+  body('dictType')
+    .trim()
+    .notEmpty()
+    .withMessage('Dict type is required'),
+  body('dictLabel')
+    .trim()
+    .notEmpty()
+    .withMessage('Dict label is required')
+    .isLength({ max: 100 })
+    .withMessage('Dict label must be less than 100 characters'),
+  body('dictValue')
+    .trim()
+    .notEmpty()
+    .withMessage('Dict value is required')
+    .isLength({ max: 100 })
+    .withMessage('Dict value must be less than 100 characters'),
+  body('dictSort')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Sort order must be a non-negative integer'),
+  body('isDefault')
+    .optional()
+    .isIn(['0', '1'])
+    .withMessage('IsDefault must be 0 or 1'),
+  body('status')
+    .optional()
+    .isIn(['0', '1'])
+    .withMessage('Status must be 0 (disabled) or 1 (enabled)'),
+  body('cssClass')
+    .optional()
+    .isLength({ max: 100 })
+    .withMessage('CSS class must be less than 100 characters'),
+  body('listClass')
+    .optional()
+    .isLength({ max: 100 })
+    .withMessage('List class must be less than 100 characters'),
+  body('remark')
+    .optional()
+    .isLength({ max: 500 })
+    .withMessage('Remark must be less than 500 characters'),
   handleValidationErrors
 ];
 
@@ -166,5 +240,7 @@ module.exports = {
   pageValidation,
   idParamValidation,
   paginationValidation,
+  dictTypeValidation,
+  dictDataValidation,
   handleValidationErrors
 };
