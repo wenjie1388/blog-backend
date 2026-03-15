@@ -89,10 +89,10 @@ router.get('/', paginationValidation, async (req, res) => {
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // 尝试从缓存获取
     const cacheKey = `article:${id}`;
-    const article = await getOrSet(cacheKey, async () => {
+    let article = await getOrSet(cacheKey, async () => {
       const articles = await query(
         `SELECT a.*,
                 c.id as categoryId, c.name as categoryName, c.slug as categorySlug,
@@ -103,18 +103,18 @@ router.get('/:id', optionalAuth, async (req, res) => {
          WHERE a.id = ?`,
         [id]
       );
-      
+
       if (articles.length === 0) {
         return null;
       }
-      
+
       return articles[0];
     }, 3600);
-    
+
     if (!article) {
       return Response.error(res, 'Article not found', 404);
     }
-    
+
     // 检查文章状态
     if (article.status !== 'published') {
       // 只有管理员或作者可以查看未发布文章
@@ -122,10 +122,21 @@ router.get('/:id', optionalAuth, async (req, res) => {
         return Response.error(res, 'Article not found', 404);
       }
     }
-    
+
+    // 获取文章标签
+    const tags = await query(
+      `SELECT t.id, t.name, t.slug, t.color
+       FROM article_tags at
+       JOIN tags t ON at.tagId = t.id
+       WHERE at.articleId = ? AND t.status = 'active'
+       ORDER BY t.articleCount DESC`,
+      [id]
+    );
+    article.tagsList = tags;
+
     // 增加浏览量
     await query('UPDATE articles SET viewCount = viewCount + 1 WHERE id = ?', [id]);
-    
+
     Response.success(res, article);
   } catch (error) {
     console.error('Get article error:', error);
@@ -136,19 +147,24 @@ router.get('/:id', optionalAuth, async (req, res) => {
 // 创建文章（管理员）
 router.post('/', authenticateToken, requireAdmin, articleValidation, async (req, res) => {
   try {
-    const { title, content, categoryId, coverImage, tags, status = 'draft' } = req.body;
+    const { title, content, categoryId, coverImage, tags, tagIds, status = 'draft' } = req.body;
     const authorId = req.user.id;
-    
+
     const excerpt = generateExcerpt(content);
-    
+
     const result = await query(
-      `INSERT INTO articles (title, content, excerpt, categoryId, authorId, coverImage, tags, status, viewCount, createdAt, updatedAt) 
+      `INSERT INTO articles (title, content, excerpt, categoryId, authorId, coverImage, tags, status, viewCount, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NOW(), NOW())`,
       [title, content, excerpt, categoryId || null, authorId, coverImage || null, tags || null, status]
     );
-    
+
     const articleId = result.insertId;
-    
+
+    // 处理标签关联
+    if (tagIds && Array.isArray(tagIds) && tagIds.length > 0) {
+      await syncArticleTags(articleId, tagIds);
+    }
+
     Response.success(res, { id: articleId }, 'Article created successfully', 201);
   } catch (error) {
     console.error('Create article error:', error);
@@ -160,19 +176,19 @@ router.post('/', authenticateToken, requireAdmin, articleValidation, async (req,
 router.put('/:id', authenticateToken, requireAdmin, idParamValidation, async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, content, categoryId, coverImage, tags, status } = req.body;
-    
+    const { title, content, categoryId, coverImage, tags, tagIds, status } = req.body;
+
     // 检查文章是否存在
     const articles = await query('SELECT * FROM articles WHERE id = ?', [id]);
     if (articles.length === 0) {
       return Response.error(res, 'Article not found', 404);
     }
-    
+
     const excerpt = content ? generateExcerpt(content) : articles[0].excerpt;
-    
+
     await query(
-      `UPDATE articles 
-       SET title = ?, content = ?, excerpt = ?, categoryId = ?, coverImage = ?, tags = ?, status = ?, updatedAt = NOW() 
+      `UPDATE articles
+       SET title = ?, content = ?, excerpt = ?, categoryId = ?, coverImage = ?, tags = ?, status = ?, updatedAt = NOW()
        WHERE id = ?`,
       [
         title || articles[0].title,
@@ -185,10 +201,22 @@ router.put('/:id', authenticateToken, requireAdmin, idParamValidation, async (re
         id
       ]
     );
-    
+
+    // 处理标签关联
+    if (tagIds !== undefined) {
+      if (Array.isArray(tagIds) && tagIds.length > 0) {
+        await syncArticleTags(id, tagIds);
+      } else {
+        // 清空标签关联
+        await query('DELETE FROM article_tags WHERE articleId = ?', [id]);
+        // 更新标签文章计数
+        await updateTagArticleCount();
+      }
+    }
+
     // 清除缓存
     await del(`article:${id}`);
-    
+
     Response.success(res, null, 'Article updated successfully');
   } catch (error) {
     console.error('Update article error:', error);
@@ -274,5 +302,61 @@ router.get('/:id/related', async (req, res) => {
     Response.error(res, 'Failed to get related articles', 500);
   }
 });
+
+// ========== 标签关联辅助函数 ==========
+
+// 同步文章标签关联
+async function syncArticleTags(articleId, tagIds) {
+  try {
+    // 删除旧的关联
+    await query('DELETE FROM article_tags WHERE articleId = ?', [articleId]);
+
+    // 插入新的关联
+    const validTagIds = [];
+    for (const tagId of tagIds) {
+      // 验证标签是否存在且有效
+      const tagExists = await query('SELECT id FROM tags WHERE id = ? AND status = ?', [tagId, 'active']);
+      if (tagExists.length > 0) {
+        validTagIds.push(tagId);
+        await query(
+          'INSERT INTO article_tags (articleId, tagId, createdAt) VALUES (?, ?, NOW())',
+          [articleId, tagId]
+        );
+      }
+    }
+
+    // 更新标签文章计数
+    await updateTagArticleCount(validTagIds);
+  } catch (error) {
+    console.error('Sync article tags error:', error);
+    throw error;
+  }
+}
+
+// 更新标签文章计数
+async function updateTagArticleCount(tagIds = null) {
+  try {
+    if (tagIds && tagIds.length > 0) {
+      // 更新指定标签的计数
+      for (const tagId of tagIds) {
+        await query(
+          `UPDATE tags SET articleCount = (
+            SELECT COUNT(*) FROM article_tags WHERE tagId = ?
+          ) WHERE id = ?`,
+          [tagId, tagId]
+        );
+      }
+    } else {
+      // 更新所有标签的计数
+      await query(
+        `UPDATE tags t SET t.articleCount = (
+          SELECT COUNT(*) FROM article_tags at WHERE at.tagId = t.id
+        )`
+      );
+    }
+  } catch (error) {
+    console.error('Update tag article count error:', error);
+  }
+}
 
 module.exports = router;
