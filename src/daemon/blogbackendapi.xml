@@ -1,0 +1,33 @@
+<service>
+	<id>blogbackendapi.exe</id>
+	<name>Blog Backend API</name>
+	<description>个人博客后端API服务</description>
+	<executable>D:\ProgramData\nvm4w\nodejs\node.exe</executable>
+	<argument>--harmony</argument>
+	<argument>--max_old_space_size=4096</argument>
+	<argument>D:\blog\Kimi_Agent_个人博客三端架构\blog-backend\node_modules\node-windows\lib\wrapper.js</argument>
+	<argument>--file</argument>
+	<argument>D:\blog\Kimi_Agent_个人博客三端架构\blog-backend\src\app.js</argument>
+	<argument>--scriptoptions=</argument>
+	<argument>--log</argument>
+	<argument>Blog Backend API wrapper</argument>
+	<argument>--grow</argument>
+	<argument>0.25</argument>
+	<argument>--wait</argument>
+	<argument>1</argument>
+	<argument>--maxrestarts</argument>
+	<argument>3</argument>
+	<argument>--abortonerror</argument>
+	<argument>n</argument>
+	<argument>--stopparentfirst</argument>
+	<argument>undefined</argument>
+	<logmode>rotate</logmode>
+	<stoptimeout>30sec</stoptimeout>
+	<env name="NODE_ENV" value="production"/>
+	<serviceaccount>
+		<domain>DESKTOP-ZCVP1QQ</domain>
+		<user>LocalSystem</user>
+		<password></password>
+	</serviceaccount>
+	<workingdirectory>D:\blog\Kimi_Agent_个人博客三端架构\blog-backend</workingdirectory>
+</service>
