@@ -22,6 +22,7 @@ const uploadRoutes = require('@/routes/upload/upload');
 const statsRoutes = require('@/routes/system/stats');
 const dictRoutes = require('@/routes/system/dict');
 const tagRoutes = require('@/routes/article/tag');
+const aiRoutes = require('@/routes/system/ai');
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/dict', dictRoutes);
 app.use('/api/tags', tagRoutes);
+app.use('/api/ai', aiRoutes);
 
 // 健康检查
 app.get('/api/health', (req, res) => {

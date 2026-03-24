@@ -230,6 +230,63 @@ const dictDataValidation = [
   handleValidationErrors
 ];
 
+// AI配置验证
+const aiConfigValidation = [
+  body('provider')
+    .trim()
+    .notEmpty()
+    .withMessage('Provider is required')
+    .isIn(['openai', 'anthropic', 'deepseek', 'qwen', 'baidu', 'custom'])
+    .withMessage('Invalid provider'),
+  body('name')
+    .trim()
+    .notEmpty()
+    .withMessage('Name is required')
+    .isLength({ max: 100 })
+    .withMessage('Name must be less than 100 characters'),
+  body('apiKey')
+    .trim()
+    .notEmpty()
+    .withMessage('API Key is required')
+    .isLength({ max: 500 })
+    .withMessage('API Key must be less than 500 characters'),
+  body('apiUrl')
+    .optional({ nullable: true })
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('API URL must be less than 500 characters'),
+  body('model')
+    .optional({ nullable: true })
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Model must be less than 100 characters'),
+  body('temperature')
+    .optional()
+    .isFloat({ min: 0, max: 2 })
+    .withMessage('Temperature must be between 0 and 2'),
+  body('maxTokens')
+    .optional()
+    .isInt({ min: 1, max: 8192 })
+    .withMessage('Max tokens must be between 1 and 8192'),
+  body('timeout')
+    .optional()
+    .isInt({ min: 5, max: 300 })
+    .withMessage('Timeout must be between 5 and 300 seconds'),
+  body('isDefault')
+    .optional()
+    .isIn(['0', '1'])
+    .withMessage('IsDefault must be 0 or 1'),
+  body('status')
+    .optional()
+    .isIn(['0', '1'])
+    .withMessage('Status must be 0 (disabled) or 1 (enabled)'),
+  body('remark')
+    .optional({ nullable: true })
+    .isLength({ max: 500 })
+    .withMessage('Remark must be less than 500 characters'),
+  handleValidationErrors
+];
+
 module.exports = {
   loginValidation,
   registerValidation,
@@ -242,5 +299,6 @@ module.exports = {
   paginationValidation,
   dictTypeValidation,
   dictDataValidation,
+  aiConfigValidation,
   handleValidationErrors
 };
