@@ -13,10 +13,9 @@ const AI_CONFIG_DEFAULT_CACHE_KEY = 'ai:config:default';
 // AI提供商列表
 const AI_PROVIDERS = [
   { value: 'openai', label: 'OpenAI', defaultUrl: 'https://api.openai.com/v1' },
-  { value: 'anthropic', label: 'Anthropic (Claude)', defaultUrl: 'https://api.anthropic.com/v1' },
+  { value: 'bailian', label: '阿里云百炼', defaultUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
   { value: 'deepseek', label: 'DeepSeek', defaultUrl: 'https://api.deepseek.com/v1' },
-  { value: 'qwen', label: '通义千问', defaultUrl: 'https://dashscope.aliyuncs.com/api/v1' },
-  { value: 'baidu', label: '百度文心', defaultUrl: 'https://aip.baidubce.com/rpc/2.0' },
+  { value: 'anthropic', label: 'Anthropic (Claude)', defaultUrl: 'https://api.anthropic.com/v1' },
   { value: 'custom', label: '自定义', defaultUrl: '' }
 ];
 
@@ -310,52 +309,70 @@ async function callAIAPI(config, prompt) {
         apiKey: config.apiKey,
         baseURL: config.apiUrl
       });
-      const response = await openai.responses.create({
+      const response = await openai.chat.completions.create({
         model: config.model,
-        input: prompt
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: config.maxTokens ? parseInt(config.maxTokens) : 2048,
+        temperature: config.temperature ? parseFloat(config.temperature) : 0.7
       });
-      return response.output_text;
+      return response.choices?.[0]?.message?.content || '';
     }
 
-    // case 'deepseek': {
-    //   const axios = require('axios');
-    //   const apiUrl = `${config.apiUrl}/chat/completions`;
-    //   const response = await axios.post(apiUrl, {
-    //     model: config.model || 'deepseek-chat',
-    //     messages: [{ role: 'user', content: prompt }],
-    //     max_tokens: maxTokens || (isTest ? 5 : (config.maxTokens || 2048)),
-    //     temperature: config.temperature ? parseFloat(config.temperature) : 0.7
-    //   }, {
-    //     headers: {
-    //       'Authorization': `Bearer ${config.apiKey}`,
-    //       'Content-Type': 'application/json'
-    //     },
-    //     timeout: (config.timeout || 30) * 1000
-    //   });
-    //   return response.data.choices?.[0]?.message?.content || '';
-    // }
+    case 'bailian':
+    case 'aliyun': {
+      // 阿里云百炼 - 使用 OpenAI 兼容格式，但需要特殊 header
+      const openai = new OpenAI({
+        apiKey: config.apiKey,
+        baseURL: config.apiUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+      });
+      const response = await openai.chat.completions.create({
+        model: config.model,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: config.maxTokens ? parseInt(config.maxTokens) : 2048,
+        temperature: config.temperature ? parseFloat(config.temperature) : 0.7
+      });
+      return response.choices?.[0]?.message?.content || '';
+    }
 
-    // case 'anthropic': {
-    //   const axios = require('axios');
-    //   const apiUrl = `${config.apiUrl}/messages`;
-    //   const response = await axios.post(apiUrl, {
-    //     model: config.model || 'claude-3-haiku-20240307',
-    //     max_tokens: maxTokens || (isTest ? 5 : (config.maxTokens || 2048)),
-    //     temperature: config.temperature ? parseFloat(config.temperature) : 0.7,
-    //     messages: [{ role: 'user', content: prompt }]
-    //   }, {
-    //     headers: {
-    //       'x-api-key': config.apiKey,
-    //       'anthropic-version': '2023-06-01',
-    //       'Content-Type': 'application/json'
-    //     },
-    //     timeout: (config.timeout || 30) * 1000
-    //   });
-    //   return response.data.content?.[0]?.text || '';
-    // }
+    case 'deepseek': {
+      const axios = require('axios');
+      const apiUrl = config.apiUrl || 'https://api.deepseek.com/v1/chat/completions';
+      const response = await axios.post(apiUrl, {
+        model: config.model || 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: config.maxTokens ? parseInt(config.maxTokens) : 2048,
+        temperature: config.temperature ? parseFloat(config.temperature) : 0.7
+      }, {
+        headers: {
+          'Authorization': `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: (config.timeout || 30) * 1000
+      });
+      return response.data.choices?.[0]?.message?.content || '';
+    }
+
+    case 'anthropic': {
+      const axios = require('axios');
+      const apiUrl = config.apiUrl || 'https://api.anthropic.com/v1/messages';
+      const response = await axios.post(apiUrl, {
+        model: config.model || 'claude-3-haiku-20240307',
+        max_tokens: config.maxTokens ? parseInt(config.maxTokens) : 2048,
+        temperature: config.temperature ? parseFloat(config.temperature) : 0.7,
+        messages: [{ role: 'user', content: prompt }]
+      }, {
+        headers: {
+          'x-api-key': config.apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json'
+        },
+        timeout: (config.timeout || 30) * 1000
+      });
+      return response.data.content?.[0]?.text || '';
+    }
 
     default:
-      throw new Error(`不支持的AI提供商: ${config.provider}，当前仅支持openai，请添加联系管理员`);
+      throw new Error(`不支持的AI提供商: ${config.provider}，当前支持: openai, bailian/aliyun, deepseek, anthropic`);
   }
 }
 

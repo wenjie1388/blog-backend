@@ -22,27 +22,28 @@ function extractFirstImage(content) {
   return match ? match[1] : null;
 }
 
-// 默认封面图库
-const DEFAULT_COVERS = [
-  'https://picsum.photos/seed/blog1/800/400',
-  'https://picsum.photos/seed/blog2/800/400',
-  'https://picsum.photos/seed/blog3/800/400',
-  'https://picsum.photos/seed/blog4/800/400',
-  'https://picsum.photos/seed/blog5/800/400',
-  'https://picsum.photos/seed/blog6/800/400',
-];
-
-// 获取随机默认封面
-function getRandomDefaultCover() {
-  return DEFAULT_COVERS[Math.floor(Math.random() * DEFAULT_COVERS.length)];
+// 从数据库获取随机默认封面
+async function getRandomDefaultCoverFromDB() {
+  try {
+    const covers = await query(
+      `SELECT url FROM covers WHERE status = 'active' ORDER BY RAND() LIMIT 1`
+    );
+    if (covers.length > 0) {
+      return covers[0].url;
+    }
+  } catch (error) {
+    console.error('Get random cover from DB error:', error);
+  }
+  // 数据库无数据时的兜底方案
+  return 'https://picsum.photos/seed/blog' + Math.floor(Math.random() * 1000) + '/800/400';
 }
 
-// 自动处理封面：优先用已上传的，其次提取首图，最后用默认封面
-function resolveCoverImage(coverImage, content) {
+// 自动处理封面：优先用已上传的，其次提取首图，最后用数据库随机封面
+async function resolveCoverImage(coverImage, content) {
   if (coverImage) return coverImage;
   const firstImage = extractFirstImage(content);
   if (firstImage) return firstImage;
-  return getRandomDefaultCover();
+  return await getRandomDefaultCoverFromDB();
 }
 
 // 获取文章列表
@@ -182,7 +183,7 @@ router.post('/', authenticateToken, requireAdmin, articleValidation, async (req,
     const authorId = req.user.id;
 
     const excerpt = generateExcerpt(content);
-    const resolvedCover = resolveCoverImage(coverImage, content);
+    const resolvedCover = await resolveCoverImage(coverImage, content);
 
     const result = await query(
       `INSERT INTO articles (title, content, excerpt, categoryId, authorId, coverImage, tags, status, viewCount, createdAt, updatedAt)
@@ -217,7 +218,7 @@ router.put('/:id', authenticateToken, requireAdmin, idParamValidation, async (re
     }
 
     const excerpt = content ? generateExcerpt(content) : articles[0].excerpt;
-    const resolvedCover = resolveCoverImage(
+    const resolvedCover = await resolveCoverImage(
       coverImage !== undefined ? coverImage : articles[0].coverImage,
       content || articles[0].content
     );

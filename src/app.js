@@ -23,6 +23,7 @@ const statsRoutes = require('@/routes/system/stats');
 const dictRoutes = require('@/routes/system/dict');
 const tagRoutes = require('@/routes/article/tag');
 const aiRoutes = require('@/routes/system/ai');
+const coverRoutes = require('@/routes/system/cover');
 
 const app = express();
 
@@ -55,6 +56,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/dict', dictRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/covers', coverRoutes);
 
 // 健康检查
 app.get('/api/health', (req, res) => {
