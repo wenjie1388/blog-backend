@@ -5,6 +5,7 @@ const { getOrSet, del } = require('@/config/redis');
 const Response = require('@/utils/response');
 const { authenticateToken, requireAdmin } = require('@/middleware/auth');
 const { aiConfigValidation, idParamValidation, paginationValidation } = require('@/middleware/validator');
+const OpenAI = require("openai");
 
 const AI_CONFIG_CACHE_PREFIX = 'ai:config:';
 const AI_CONFIG_DEFAULT_CACHE_KEY = 'ai:config:default';
@@ -300,11 +301,68 @@ router.get('/configs/default/public', async (req, res) => {
   }
 });
 
+// 调用AI API的通用函数
+async function callAIAPI(config, prompt) {
+
+  switch (config.provider) {
+    case 'openai': {
+      const openai = new OpenAI({
+        apiKey: config.apiKey,
+        baseURL: config.apiUrl
+      });
+      const response = await openai.responses.create({
+        model: config.model,
+        input: prompt
+      });
+      return response.output_text;
+    }
+
+    // case 'deepseek': {
+    //   const axios = require('axios');
+    //   const apiUrl = `${config.apiUrl}/chat/completions`;
+    //   const response = await axios.post(apiUrl, {
+    //     model: config.model || 'deepseek-chat',
+    //     messages: [{ role: 'user', content: prompt }],
+    //     max_tokens: maxTokens || (isTest ? 5 : (config.maxTokens || 2048)),
+    //     temperature: config.temperature ? parseFloat(config.temperature) : 0.7
+    //   }, {
+    //     headers: {
+    //       'Authorization': `Bearer ${config.apiKey}`,
+    //       'Content-Type': 'application/json'
+    //     },
+    //     timeout: (config.timeout || 30) * 1000
+    //   });
+    //   return response.data.choices?.[0]?.message?.content || '';
+    // }
+
+    // case 'anthropic': {
+    //   const axios = require('axios');
+    //   const apiUrl = `${config.apiUrl}/messages`;
+    //   const response = await axios.post(apiUrl, {
+    //     model: config.model || 'claude-3-haiku-20240307',
+    //     max_tokens: maxTokens || (isTest ? 5 : (config.maxTokens || 2048)),
+    //     temperature: config.temperature ? parseFloat(config.temperature) : 0.7,
+    //     messages: [{ role: 'user', content: prompt }]
+    //   }, {
+    //     headers: {
+    //       'x-api-key': config.apiKey,
+    //       'anthropic-version': '2023-06-01',
+    //       'Content-Type': 'application/json'
+    //     },
+    //     timeout: (config.timeout || 30) * 1000
+    //   });
+    //   return response.data.content?.[0]?.text || '';
+    // }
+
+    default:
+      throw new Error(`不支持的AI提供商: ${config.provider}，当前仅支持openai，请添加联系管理员`);
+  }
+}
+
 // 测试AI配置连接
 router.post('/configs/:id/test', authenticateToken, requireAdmin, idParamValidation, async (req, res) => {
   try {
     const { id } = req.params;
-
     // 获取配置
     const rows = await query('SELECT * FROM sys_ai_config WHERE id = ?', [id]);
     if (rows.length === 0) {
@@ -313,51 +371,10 @@ router.post('/configs/:id/test', authenticateToken, requireAdmin, idParamValidat
 
     const config = rows[0];
 
-    // 简单的连接测试 - 发送一个测试请求
-    const axios = require('axios');
+    // 调用AI API进行连接测试
+    await callAIAPI(config, '这是条测试消息');
 
-    let testUrl = config.apiUrl;
-    let headers = {
-      'Content-Type': 'application/json'
-    };
-    let data = {};
-
-    // 根据不同提供商设置不同的请求格式
-    switch (config.provider) {
-      case 'openai':
-      case 'deepseek':
-        testUrl = `${config.apiUrl}/chat/completions`;
-        headers['Authorization'] = `Bearer ${config.apiKey}`;
-        data = {
-          model: config.model || 'gpt-3.5-turbo',
-          messages: [{ role: 'user', content: 'Hello' }],
-          max_tokens: 5
-        };
-        break;
-      case 'anthropic':
-        testUrl = `${config.apiUrl}/messages`;
-        headers['x-api-key'] = config.apiKey;
-        headers['anthropic-version'] = '2023-06-01';
-        data = {
-          model: config.model || 'claude-3-haiku-20240307',
-          max_tokens: 5,
-          messages: [{ role: 'user', content: 'Hello' }]
-        };
-        break;
-      default:
-        return Response.error(res, 'Unsupported provider for testing', 400);
-    }
-
-    const response = await axios.post(testUrl, data, {
-      headers,
-      timeout: (config.timeout || 30) * 1000
-    });
-
-    if (response.status === 200) {
-      Response.success(res, { message: '连接测试成功', provider: config.provider });
-    } else {
-      Response.error(res, '连接测试失败', 500);
-    }
+    Response.success(res, { message: '连接测试成功', provider: config.provider });
   } catch (error) {
     console.error('Test AI config error:', error);
     Response.error(res, `连接测试失败: ${error.message}`, 500);
@@ -390,64 +407,11 @@ router.post('/generate', authenticateToken, async (req, res) => {
       config = rows[0];
     }
 
-    // 调用AI接口生成内容
-    const axios = require('axios');
-
-    let apiUrl = config.apiUrl;
-    let headers = {
-      'Content-Type': 'application/json'
-    };
-    let requestData = {};
-
     // 构建提示词
     const prompt = `请根据以下关键词或描述生成一段内容：\n\n${keyword.trim()}\n\n请生成高质量、有深度的内容。`;
 
-    // 根据不同提供商设置不同的请求格式
-    switch (config.provider) {
-      case 'openai':
-      case 'deepseek':
-        apiUrl = `${config.apiUrl}/chat/completions`;
-        headers['Authorization'] = `Bearer ${config.apiKey}`;
-        requestData = {
-          model: config.model || 'gpt-3.5-turbo',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: config.temperature ? parseFloat(config.temperature) : 0.7,
-          max_tokens: config.maxTokens || 2048
-        };
-        break;
-
-      case 'anthropic':
-        apiUrl = `${config.apiUrl}/messages`;
-        headers['x-api-key'] = config.apiKey;
-        headers['anthropic-version'] = '2023-06-01';
-        requestData = {
-          model: config.model || 'claude-3-haiku-20240307',
-          max_tokens: config.maxTokens || 2048,
-          temperature: config.temperature ? parseFloat(config.temperature) : 0.7,
-          messages: [{ role: 'user', content: prompt }]
-        };
-        break;
-
-      default:
-        return Response.error(res, '不支持的AI提供商', 400);
-    }
-
-    const response = await axios.post(apiUrl, requestData, {
-      headers,
-      timeout: (config.timeout || 30) * 1000
-    });
-
-    // 解析响应内容
-    let generatedContent = '';
-    if (config.provider === 'openai' || config.provider === 'deepseek') {
-      generatedContent = response.data.choices?.[0]?.message?.content || '';
-    } else if (config.provider === 'anthropic') {
-      generatedContent = response.data.content?.[0]?.text || '';
-    }
-
-    if (!generatedContent) {
-      return Response.error(res, 'AI生成内容为空', 500);
-    }
+    // 调用AI API生成内容
+    const generatedContent = await callAIAPI(config, prompt);
 
     Response.success(res, {
       content: generatedContent,
@@ -459,6 +423,44 @@ router.post('/generate', authenticateToken, async (req, res) => {
     console.error('AI generate error:', error);
     if (error.response) {
       // AI API返回的错误
+      const errorMessage = error.response.data?.error?.message || error.response.data?.message || 'AI服务调用失败';
+      return Response.error(res, `AI生成失败: ${errorMessage}`, 500);
+    }
+    Response.error(res, `AI生成失败: ${error.message}`, 500);
+  }
+});
+
+// AI生成摘要
+router.post('/generate-excerpt', authenticateToken, async (req, res) => {
+  try {
+    const { content, maxLength = 200 } = req.body;
+
+    if (!content || content.trim().length === 0) {
+      return Response.error(res, '文章内容不能为空', 400);
+    }
+
+    // 获取默认AI配置
+    const rows = await query('SELECT * FROM sys_ai_config WHERE isDefault = "1" AND status = "1" LIMIT 1');
+    if (rows.length === 0) {
+      return Response.error(res, '未找到默认AI配置，请先配置AI', 404);
+    }
+    const config = rows[0];
+
+    // 构建提示词
+    const prompt = `请为以下文章生成一段简洁的摘要，不超过${maxLength}字。直接输出摘要内容，不要包含任何前缀或额外说明：\n\n${content.trim()}`;
+
+    // 调用AI API
+    const excerpt = await callAIAPI(config, prompt);
+
+    Response.success(res, {
+      excerpt: excerpt.trim(),
+      provider: config.provider,
+      model: config.model
+    });
+
+  } catch (error) {
+    console.error('AI generate excerpt error:', error);
+    if (error.response) {
       const errorMessage = error.response.data?.error?.message || error.response.data?.message || 'AI服务调用失败';
       return Response.error(res, `AI生成失败: ${errorMessage}`, 500);
     }

@@ -273,11 +273,11 @@ async function initDatabase() {
       console.log('Inserting menus...');
       await connection.query(
         `INSERT INTO menus (name, path, icon, target, parentId, sortOrder, isVisible) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ['首页', '/', 'Home', '_self', null, 1, 1]
+        ['首页', '/', 'HomeFilled', '_self', null, 1, 1]
       );
       const [articlesMenu] = await connection.query(
         `INSERT INTO menus (name, path, icon, target, parentId, sortOrder, isVisible) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ['文章', '/articles', 'FileText', '_self', null, 2, 1]
+        ['文章', '/articles', 'Document', '_self', null, 2, 1]
       );
       const articleMenuId = articlesMenu.insertId;
       await connection.query(
@@ -288,11 +288,11 @@ async function initDatabase() {
       // 插入子菜单
       await connection.query(
         `INSERT INTO menus (name, path, icon, target, parentId, sortOrder, isVisible) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ['设计', '/category/design', 'Palette', '_self', articleMenuId, 1, 1]
+        ['设计', '/category/design', 'Brush', '_self', articleMenuId, 1, 1]
       );
       await connection.query(
         `INSERT INTO menus (name, path, icon, target, parentId, sortOrder, isVisible) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ['工程', '/category/engineering', 'Code', '_self', articleMenuId, 2, 1]
+        ['工程', '/category/engineering', 'Promotion', '_self', articleMenuId, 2, 1]
       );
       await connection.query(
         `INSERT INTO menus (name, path, icon, target, parentId, sortOrder, isVisible) VALUES (?, ?, ?, ?, ?, ?, ?)`,

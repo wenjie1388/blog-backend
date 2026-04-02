@@ -14,6 +14,37 @@ function generateExcerpt(content, maxLength = 200) {
   return plainText.substring(0, maxLength) + '...';
 }
 
+// 从文章内容中提取第一张图片
+function extractFirstImage(content) {
+  if (!content) return null;
+  const imgRegex = /<img[^>]+src=["']([^"']+)["']/i;
+  const match = content.match(imgRegex);
+  return match ? match[1] : null;
+}
+
+// 默认封面图库
+const DEFAULT_COVERS = [
+  'https://picsum.photos/seed/blog1/800/400',
+  'https://picsum.photos/seed/blog2/800/400',
+  'https://picsum.photos/seed/blog3/800/400',
+  'https://picsum.photos/seed/blog4/800/400',
+  'https://picsum.photos/seed/blog5/800/400',
+  'https://picsum.photos/seed/blog6/800/400',
+];
+
+// 获取随机默认封面
+function getRandomDefaultCover() {
+  return DEFAULT_COVERS[Math.floor(Math.random() * DEFAULT_COVERS.length)];
+}
+
+// 自动处理封面：优先用已上传的，其次提取首图，最后用默认封面
+function resolveCoverImage(coverImage, content) {
+  if (coverImage) return coverImage;
+  const firstImage = extractFirstImage(content);
+  if (firstImage) return firstImage;
+  return getRandomDefaultCover();
+}
+
 // 获取文章列表
 router.get('/', paginationValidation, async (req, res) => {
   try {
@@ -21,7 +52,7 @@ router.get('/', paginationValidation, async (req, res) => {
     const limit = req.query.limit || 10;
     const offset = (page - 1) * limit;
     const categoryId = req.query.categoryId ? Number(req.query.categoryId) : null;
-    const status = req.query.status || 'published';
+    const status = req.query.status || 'all';
     const search = req.query.search || '';
     const tag = req.query.tag || '';
     
@@ -151,11 +182,12 @@ router.post('/', authenticateToken, requireAdmin, articleValidation, async (req,
     const authorId = req.user.id;
 
     const excerpt = generateExcerpt(content);
+    const resolvedCover = resolveCoverImage(coverImage, content);
 
     const result = await query(
       `INSERT INTO articles (title, content, excerpt, categoryId, authorId, coverImage, tags, status, viewCount, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NOW(), NOW())`,
-      [title, content, excerpt, categoryId || null, authorId, coverImage || null, tags || null, status]
+      [title, content, excerpt, categoryId || null, authorId, resolvedCover, tags || null, status]
     );
 
     const articleId = result.insertId;
@@ -185,6 +217,10 @@ router.put('/:id', authenticateToken, requireAdmin, idParamValidation, async (re
     }
 
     const excerpt = content ? generateExcerpt(content) : articles[0].excerpt;
+    const resolvedCover = resolveCoverImage(
+      coverImage !== undefined ? coverImage : articles[0].coverImage,
+      content || articles[0].content
+    );
 
     await query(
       `UPDATE articles
@@ -195,7 +231,7 @@ router.put('/:id', authenticateToken, requireAdmin, idParamValidation, async (re
         content || articles[0].content,
         excerpt,
         categoryId !== undefined ? categoryId : articles[0].categoryId,
-        coverImage !== undefined ? coverImage : articles[0].coverImage,
+        resolvedCover,
         tags !== undefined ? tags : articles[0].tags,
         status || articles[0].status,
         id
@@ -270,8 +306,8 @@ router.get('/:id/related', async (req, res) => {
          LEFT JOIN categories c ON a.categoryId = c.id
          WHERE a.id != ? AND a.categoryId = ? AND a.status = 'published'
          ORDER BY a.createdAt DESC
-         LIMIT ?`,
-        [id, categoryId, limit]
+         LIMIT ${parseInt(limit)}`,
+        [id, categoryId]
       );
     }
     
@@ -289,8 +325,8 @@ router.get('/:id/related', async (req, res) => {
          LEFT JOIN categories c ON a.categoryId = c.id
          WHERE a.id NOT IN (${placeholders}) AND a.status = 'published'
          ORDER BY a.createdAt DESC
-         LIMIT ?`,
-        [...existingIds, Number(additionalLimit)]
+         LIMIT ${parseInt(additionalLimit)}`,
+        [...existingIds]
       );
       
       relatedArticles = relatedArticles.concat(additionalArticles);
